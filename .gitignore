@@ -1,0 +1,5 @@
+.env
+db_data/
+wp/
+nginx/certs/
+docker/wp/wp-content/uploads/
