@@ -1,17 +1,20 @@
 FROM php:8.2-fpm
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
+# Install dependencies with retry and updated package names
+RUN apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    ca-certificates \
+    libfreetype-dev \
+    libjpeg-dev \
     libpng-dev \
+    libwebp-dev \
     libzip-dev \
     zip \
     unzip \
     sendmail \
     msmtp \
-    msmtp-mta \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) \
         gd \
         mysqli \
