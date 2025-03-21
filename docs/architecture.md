@@ -55,7 +55,7 @@ SrLWordpress 是一個基於 Docker 的 WordPress 開發環境，採用現代化
 │       └── php.ini    # PHP 配置
 ├── nginx/              # Nginx 配置
 │   ├── conf.d/        # 站點配置
-│   │   ├── default.conf      # 動態生成的配置
+│   │   ├── default.conf (由 generate-nginx-conf.sh 動態生成)
 │   │   ├── dev.conf.template # 開發環境模板
 │   │   └── prod.conf.template # 生產環境模板
 │   └── certs/         # SSL 證書
