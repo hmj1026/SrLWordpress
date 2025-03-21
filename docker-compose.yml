@@ -12,6 +12,16 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/certs:/etc/nginx/certs
       - ./wp:/var/www/html
+      - ./scripts:/scripts
+    environment:
+      - PROJECT_NAME=${PROJECT_NAME}
+      - NGINX_HOST=${NGINX_HOST}
+      - ENV_TYPE=${ENV_TYPE:-dev}
+    command: >
+      /bin/sh -c "
+      chmod +x /scripts/generate-nginx-conf.sh &&
+      /scripts/generate-nginx-conf.sh &&
+      nginx -g 'daemon off;'"
     depends_on:
       - wordpress
     networks:

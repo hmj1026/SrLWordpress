@@ -1,5 +1,28 @@
+# 環境配置
 .env
+.env.*
+!.env.example
+
+# 數據目錄
 db_data/
-wp/
-nginx/certs/
-docker/wp/wp-content/uploads/
+backups/
+
+# WordPress 核心文件和上傳內容
+wp/*
+!wp/.gitkeep
+
+# Nginx 配置和證書
+nginx/certs/*
+!nginx/certs/.gitkeep
+nginx/conf.d/default.conf
+
+# 日誌文件
+*.log
+
+# 系統文件
+.DS_Store
+Thumbs.db
+
+# IDE 配置
+.idea/
+.vscode/
