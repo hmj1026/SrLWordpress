@@ -9,6 +9,7 @@ readonly BACKUP_ROOT="${BACKUP_ROOT:-./backups}"
 readonly TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 readonly BACKUP_DIR="$BACKUP_ROOT/backup_$TIMESTAMP"
 readonly MYSQL_CRED_FILE="mysql_credentials.cnf"
+readonly RETENTION_DAYS="${RETENTION_DAYS:-7}"  # 預設保留7天
 
 # 載入 .env 檔案
 # 預設路徑為腳本的上層目錄中的 .env
@@ -65,6 +66,31 @@ prompt_add_drop_db() {
     esac
 }
 
+# 清理舊備份
+cleanup_old_backups() {
+    if [ "$RETENTION_DAYS" -gt 0 ]; then
+        echo "  ▷ 清理 $RETENTION_DAYS 天前的舊備份..."
+        find "$BACKUP_ROOT" -name "backup_*.tar.gz" -type f -mtime +"$RETENTION_DAYS" -delete
+        find "$BACKUP_ROOT" -name "backup_*.tar.gz.sha256" -type f -mtime +"$RETENTION_DAYS" -delete
+        echo "    - 清理完成"
+    fi
+}
+
+# 建立符號連結到最新備份
+create_latest_symlink() {
+    local latest_link="$BACKUP_ROOT/latest.tar.gz"
+    local latest_checksum="$BACKUP_ROOT/latest.tar.gz.sha256"
+    
+    # 移除舊的符號連結
+    rm -f "$latest_link" "$latest_checksum"
+    
+    # 建立新的符號連結
+    ln -sf "backup_$TIMESTAMP.tar.gz" "$latest_link"
+    ln -sf "backup_$TIMESTAMP.tar.gz.sha256" "$latest_checksum"
+    
+    echo "    - 已建立符號連結：$latest_link"
+}
+
 # 主備份流程
 main() {
     # 檢查必要環境變數
@@ -105,6 +131,10 @@ main() {
         echo "完成（無進度顯示）"
     fi
 
+    # 檢查資料庫備份大小
+    DB_SIZE=$(du -h "$BACKUP_DIR/database.sql" | cut -f1)
+    echo "    - 資料庫備份大小：$DB_SIZE"
+
     # WordPress 檔案備份
     echo "  ▷ 備份 WordPress 檔案..."
     mkdir -p "$BACKUP_DIR/wp-content"
@@ -119,7 +149,7 @@ main() {
             || error_exit "wp-config.php 同步失敗"
         docker exec "$WP_CONTAINER" rsync -aAHX --delete \
             /var/www/html/.htaccess /backup_tmp/ 2>/dev/null || echo "    警告：.htaccess 檔案不存在"
-        docker cp "$WP_CONTAINER:/backup_tmp" "$BACKUP_DIR/" || error_exit "檔案拷貝失敗"
+        docker cp "$WP_CONTAINER:/backup_tmp/." "$BACKUP_DIR/" || error_exit "檔案拷貝失敗"
     else
         echo "    - rsync 不可用，使用標準方式備份..."
         docker cp "$WP_CONTAINER:/var/www/html/wp-content" "$BACKUP_DIR/" || error_exit "wp-content 備份失敗"
@@ -127,23 +157,46 @@ main() {
         docker cp "$WP_CONTAINER:/var/www/html/.htaccess" "$BACKUP_DIR/" 2>/dev/null || echo "    警告：.htaccess 檔案不存在"
     fi
 
+    # 檢查備份檔案完整性
+    echo "    - 檢查備份檔案完整性..."
+    if [ ! -d "$BACKUP_DIR/wp-content" ]; then
+        error_exit "wp-content 目錄備份失敗"
+    fi
+    if [ ! -f "$BACKUP_DIR/wp-config.php" ]; then
+        error_exit "wp-config.php 檔案備份失敗"
+    fi
+
     # 生成校驗碼
     echo "  ▷ 生成檔案校驗碼..."
-    sha256sum "$BACKUP_DIR"/*/* "$BACKUP_DIR"/* > "$BACKUP_DIR/checksums.sha256" 2>/dev/null || true
+    (cd "$BACKUP_DIR" && \
+    find . -type f -not -name "checksums.sha256" -exec sha256sum {} \; > checksums.sha256)
 
     # 壓縮備份
     echo "  ▷ 壓縮備份檔案..."
-    tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_ROOT" "backup_$TIMESTAMP" || error_exit "壓縮失敗"
+    if command -v pigz >/dev/null 2>&1; then
+        echo "    - 使用 pigz 多線程壓縮..."
+        tar -I pigz -cf "$BACKUP_DIR.tar.gz" -C "$BACKUP_ROOT" "backup_$TIMESTAMP" || error_exit "壓縮失敗"
+    else
+        echo "    - 使用標準 gzip 壓縮..."
+        tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_ROOT" "backup_$TIMESTAMP" || error_exit "壓縮失敗"
+    fi
     sha256sum "$BACKUP_DIR.tar.gz" > "$BACKUP_DIR.tar.gz.sha256"
+
+    # 建立符號連結到最新備份
+    create_latest_symlink
 
     # 清理臨時檔案
     cleanup_temp
     rm -rf "$BACKUP_DIR"
 
+    # 清理舊備份
+    cleanup_old_backups
+
     echo -e "\n✔ 備份成功完成！"
     echo "備份檔案位置：$BACKUP_DIR.tar.gz"
     echo "檔案大小：$(du -h "$BACKUP_DIR.tar.gz" | cut -f1)"
     echo "校驗碼檔案：$BACKUP_DIR.tar.gz.sha256"
+    echo "快速存取：$BACKUP_ROOT/latest.tar.gz"
     if [ "$ADD_DROP_DB" = "true" ]; then
         echo "注意：此備份包含 DROP DATABASE 語句，還原時將覆蓋目標資料庫。"
     fi
