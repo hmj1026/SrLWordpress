@@ -26,48 +26,22 @@ ENV_TYPE=dev               # 環境類型
 ### 2. 生成自簽證書
 
 ```bash
-# 設定執行權限
+# 設定腳本權限
 chmod +x scripts/generate-ssl.sh
 
-# 執行證書生成腳本
+# 執行生成腳本
 ./scripts/generate-ssl.sh
-
-# 依序輸入：
-# 1. 專案名稱
-# 2. 選擇環境類型（dev）
-# 3. 輸入域名
 ```
 
-### 3. 信任本地證書
+腳本會自動完成以下操作：
+1. 在 nginx/certs 目錄生成 dev_mysite.key 和 dev_mysite.crt
+2. 自動配置本地 hosts 文件（需 sudo 權限）
+3. 重啟 Nginx 容器
 
-#### macOS
+### 3. 驗證配置
+
 ```bash
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain nginx/certs/dev_${PROJECT_NAME}.crt
-```
-
-#### Windows
-1. 按兩下 `nginx/certs/dev_${PROJECT_NAME}.crt`
-2. 點擊「安裝證書」
-3. 選擇「本機電腦」
-4. 選擇「將所有證書放入以下存放區」
-5. 瀏覽並選擇「受信任的根憑證授權單位」
-6. 完成安裝
-
-#### Linux
-```bash
-sudo cp nginx/certs/dev_${PROJECT_NAME}.crt /usr/local/share/ca-certificates/
-sudo update-ca-certificates
-```
-
-### 4. 設定本地域名
-
-編輯 hosts 文件：
-- macOS/Linux: `/etc/hosts`
-- Windows: `C:\Windows\System32\drivers\etc\hosts`
-
-添加：
-```
-127.0.0.1 your-domain.dev
+docker-compose exec nginx nginx -t
 ```
 
 ## 生產環境設定
@@ -77,100 +51,60 @@ sudo update-ca-certificates
 編輯 `.env` 文件：
 ```ini
 PROJECT_NAME=mysite          # 專案名稱
-NGINX_HOST=mysite.com       # 生產域名
+NGINX_HOST=mysite.com       # 正式域名
 ENV_TYPE=prod              # 環境類型
 ```
 
-### 2. Let's Encrypt 證書（推薦）
+### 2. 使用 Let's Encrypt
 
 ```bash
-# 安裝 certbot
-apt install -y certbot
+# 停止 Nginx 服務
+docker-compose stop nginx
 
-# 申請證書
-certbot certonly --webroot \
-  -w /var/www/products/[repository_name]/public \
-  -d your-domain.com
+# 使用 certbot 獲取證書（需開放 80/443 端口）
+sudo certbot certonly --standalone -d mysite.com
 
-# 複製並重命名證書
-cp /etc/letsencrypt/live/your-domain.com/fullchain.pem nginx/certs/prod_${PROJECT_NAME}.crt
-cp /etc/letsencrypt/live/your-domain.com/privkey.pem nginx/certs/prod_${PROJECT_NAME}.key
+# 複製證書到指定位置
+sudo cp /etc/letsencrypt/live/mysite.com/{fullchain.pem,privkey.pem} nginx/certs/prod_mysite.{crt,key}
 
-# 設定自動更新
-echo "0 0 1 * * certbot renew --quiet && docker-compose restart nginx" | crontab -
+# 重啟服務
+docker-compose up -d
 ```
 
-### 3. 自簽證書（測試用）
+## 混合環境配置
 
-如果只是測試用途，也可以使用自簽證書：
-
-```bash
-./scripts/generate-ssl.sh
-# 選擇 prod 環境並輸入域名
+多域名範例：
+```ini
+NGINX_HOST=dev.mysite.com,prod.mysite.com
 ```
 
-## Nginx 配置
+對應證書命名：
+- 開發：dev_mysite.crt/key
+- 生產：prod_mysite.crt/key
 
-系統會根據環境變數自動選擇正確的配置模板：
+## 注意事項
 
-### 開發環境 (dev.conf.template)
-- 較寬鬆的安全設定
-- 更長的超時時間
-- 更大的上傳限制
-
-### 生產環境 (prod.conf.template)
-- 嚴格的安全標頭
-- 最佳化的性能設定
-- 額外的安全限制
-
-## 證書管理
-
-### 查看證書信息
-
+1. 證書有效期監控：
 ```bash
-# 查看證書詳細信息
-openssl x509 -in nginx/certs/${ENV_TYPE}_${PROJECT_NAME}.crt -text -noout
-
-# 檢查證書有效期
 openssl x509 -in nginx/certs/${ENV_TYPE}_${PROJECT_NAME}.crt -noout -dates
 ```
 
-### 證書備份
-
+2. 自動續期設定（生產環境）：
 ```bash
-# 備份證書
-tar -czf ssl-backup.tar.gz nginx/certs/
+# 每月 1 號凌晨 2:30 自動續期
+30 2 1 * * root certbot renew --quiet --deploy-hook "docker-compose restart nginx"
 ```
 
-### 證書更新
+3. 開發環境證書需手動加入系統信任庫：
+```bash
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain nginx/certs/dev_mysite.crt
+```
 
-1. 開發環境：重新執行 generate-ssl.sh
-2. 生產環境：
-   - Let's Encrypt：等待自動更新
-   - 自簽證書：重新執行 generate-ssl.sh
-
-## 故障排除
-
-### 常見問題
-
-1. 證書不受信任
-   - 確認證書已正確安裝到系統信任存儲
-   - 檢查證書路徑和權限
-   - 確認證書名稱格式正確
-
-2. 證書不匹配
-   - 確認環境變數設定正確
-   - 檢查 Nginx 配置中的證書路徑
-   - 確認域名與證書匹配
-
-3. 憑證過期
-   - 開發環境：重新生成證書
-   - 生產環境：檢查 Let's Encrypt 自動更新
-
-### 安全建議
-
-1. 定期更新證書
-2. 使用強加密套件
-3. 啟用 HSTS
-4. 限制 SSL 協議版本
-5. 保護證書私鑰
+4. 證書目錄結構：
+```
+nginx/
+└── certs/
+    ├── dev_mysite.crt
+    ├── dev_mysite.key
+    ├── prod_mysite.crt
+    └── prod_mysite.key
