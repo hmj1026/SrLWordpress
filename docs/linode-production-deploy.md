@@ -2,25 +2,25 @@
 
 ## 前置準備
 
-1. Linode 帳號和 API Token
-2. 已完成本地環境測試
-3. 已準備好正式網站的備份資料
-4. 已購買網域並可以管理 DNS 設定
+1.  Linode 帳號和 API Token
+2.  已完成本地環境測試
+3.  已準備好正式網站的備份資料
+4.  已購買網域並可以管理 DNS 設定
 
 ## 部署步驟
 
 ### 1. Linode 實例設定
 
-1. 登入 Linode Cloud Manager
-2. 建立新的 Linode：
-   - **方案選擇**：Nanode 1GB
-     * CPU: 1 核心
-     * RAM: 1GB
-     * Storage: 25GB
-     * Transfer: 1TB
-   - **地區**：選擇離目標用戶最近的數據中心（建議：Tokyo 2）
-   - **映像**：Ubuntu 24.04 LTS
-   - **標籤**：production
+1.  登入 Linode Cloud Manager
+2.  建立新的 Linode：
+    *   **方案選擇**：Nanode 1GB
+        *   CPU: 1 核心
+        *   RAM: 1GB
+        *   Storage: 25GB
+        *   Transfer: 1TB
+    *   **地區**：選擇離目標用戶最近的數據中心（建議：Tokyo 2）
+    *   **映像**：Ubuntu 24.04 LTS
+    *   **標籤**：production
 
 ### 2. 基礎系統設定
 
@@ -98,9 +98,9 @@ cp .env.example .env
 
 # 編輯 .env 文件，設定：
 # 基本設定
-PROJECT_NAME=your_project    # 專案名稱
-NGINX_HOST=your-domain.com  # 生產域名
-ENV_TYPE=prod              # 環境類型
+PROJECT_NAME=your_project
+NGINX_HOST=your-domain.com
+ENV_TYPE=prod
 
 # 資料庫和 PHP 設定
 PHP_MEMORY_LIMIT=256M
@@ -125,8 +125,7 @@ echo "PROJECT_NAME=${PROJECT_NAME}"
 echo "NGINX_HOST=${NGINX_HOST}"
 echo "ENV_TYPE=${ENV_TYPE}"
 
-# 如果使用 docker-compose up，配置會自動生成
-# 手動生成配置（如果需要）：
+# 手動生成配置
 docker-compose exec nginx /scripts/generate-nginx-conf.sh
 
 # 驗證生成的配置
@@ -207,19 +206,6 @@ sed -i 's/# memory mode = save/memory mode = ram/g' /etc/netdata/netdata.conf
 systemctl restart netdata
 ```
 
-### 10. 備份策略
-
-```bash
-# 建立備份目錄
-mkdir -p backups
-
-# 設定定時備份
-echo "0 3 * * * cd /var/www/products/[repository_name] && ./scripts/backup.sh" | crontab -
-
-# 設定備份保留期限（7天）
-find backups -type d -mtime +7 -exec rm -rf {} +
-```
-
 ## 維護指南
 
 ### 1. 定期維護
@@ -266,6 +252,33 @@ docker-compose restart nginx
 certbot certificates
 ```
 
+#### 使用 Certbot 的 Standalone 模式自動更新憑證
+
+1.  **建立排程任務 (crontab)**：
+
+```bash
+  # 編輯 crontab 設定
+  crontab -e
+```
+
+2.  **添加以下排程任務**：
+
+```
+  0 0 1 * * /usr/bin/docker stop wp_nginx && /usr/bin/certbot renew --quiet --standalone && /usr/bin/docker start wp_nginx && /bin/cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /var/www/products/[repository_name]/nginx/certs/prod_${PROJECT_NAME}.crt && /bin/cp /etc/letsencrypt/live/your-domain.com/privkey.pem /var/www/products/[repository_name]/nginx/certs/prod_${PROJECT_NAME}.key && /usr/bin/docker exec wp_nginx nginx -s reload
+```
+
+3.  **保存並關閉文件**。
+
+**排程任務說明**：
+
+*   `0 0 1 * *`：表示在每個月的第 1 天的凌晨 0 點 0 分執行。
+*   `/usr/bin/docker stop wp_nginx`：停止 Nginx 容器。
+*   `/usr/bin/certbot renew --quiet --standalone`：使用 Certbot 的 standalone 模式更新證書，`--quiet` 選項表示靜默模式，不輸出詳細信息。
+*   `/usr/bin/docker start wp_nginx`：啟動 Nginx 容器。
+*   `/bin/cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ...`：將更新後的證書文件複製到項目目錄中。
+*   `/bin/cp /etc/letsencrypt/live/your-domain.com/privkey.pem ...`：將更新後的私鑰文件複製到項目目錄中。
+*   `/usr/bin/docker exec wp_nginx nginx -s reload`：在 Nginx 容器中重新加載 Nginx 配置。
+
 ## 故障排除
 
 ### 1. Nginx 相關問題
@@ -304,18 +317,252 @@ docker stats
 docker system prune
 ```
 
-## 安全建議
+### 4. Docker 服務和容器問題
 
-1. 定期更新系統和套件
-2. 監控異常訪問
-3. 定期檢查日誌
-4. 維護備份
-5. 限制管理員訪問
+如果遇到與 Docker 相關的錯誤，例如無法啟動容器、無法執行 `docker-compose` 命令等，請嘗試以下步驟：
 
-## 性能優化
+#### 方法 1：檢查 Docker 服務狀態
 
-1. 定期清理快取
-2. 優化資料庫查詢
-3. 監控資源使用
-4. 調整容器限制
-5. 優化 Nginx 配置
+```bash
+# 檢查 Docker 服務是否正在運行（可能需要 sudo）
+systemctl status docker
+
+# 如果 Docker 服務未運行，嘗試啟動它
+systemctl start docker
+
+# 檢查 Docker 服務是否已啟用（開機自啟動）
+systemctl is-enabled docker
+
+# 如果未啟用，啟用 Docker 服務
+systemctl enable docker
+```
+
+#### 方法 2：重啟 Docker 服務
+
+```bash
+# 重啟 Docker 服務（可能需要 sudo）
+systemctl restart docker
+```
+
+#### 方法 3：重建 Docker 容器
+
+```bash
+# 停止並刪除所有容器
+docker-compose down
+
+# 重新構建並啟動容器
+docker-compose up --build -d
+```
+
+#### 方法 4：檢查 Docker Compose 版本
+
+```bash
+# 檢查 Docker Compose 版本
+docker-compose --version
+
+# 如果版本過舊，嘗試更新 Docker Compose
+# （請參考 Docker Compose 官方文檔獲取最新安裝說明）
+```
+
+#### 方法 5：檢查系統日誌
+
+```bash
+# 查看系統日誌，查找與 Docker 相關的錯誤信息
+journalctl -u docker.service
+
+# 查看更詳細的日誌（可能需要 sudo）
+journalctl -xe
+```
+
+### 5. WordPress 文件缺失問題
+
+如果您發現 wp 目錄是空的，或者在瀏覽器中訪問網站時遇到 403 Forbidden 錯誤，並在 Nginx 日誌中看到類似以下內容：
+
+```
+[error] *1 directory index of "/var/www/html/" is forbidden, client: x.x.x.x, server: your-domain.com, request: "GET / HTTP/2.0", host: "your-domain.com"
+```
+
+這通常表示 WordPress 文件未正確安裝。解決方法：
+
+#### 方法 1：檢查 WordPress 文件
+
+```bash
+# 檢查 wp 目錄是否為空
+ls -la wp/
+
+# 檢查 WordPress 容器中的文件
+docker-compose exec wordpress ls -la /var/www/html/
+
+# 如果目錄為空，需要安裝 WordPress
+```
+
+#### 方法 2：手動下載 WordPress 文件
+
+```bash
+# 進入專案目錄
+cd /var/www/products/[repository_name]
+
+# 下載最新版 WordPress
+wget https://wordpress.org/latest.tar.gz
+
+# 解壓縮到 wp 目錄
+tar -xzf latest.tar.gz
+cp -a wordpress/. wp/
+rm -rf wordpress latest.tar.gz
+
+# 設置正確的權限
+chown -R www-data:www-data wp/
+find wp/ -type d -exec chmod 755 {} \;
+find wp/ -type f -exec chmod 644 {} \;
+
+# 重啟容器
+docker-compose restart
+```
+
+#### 方法 3：使用 WP-CLI 安裝 WordPress
+
+```bash
+# 確保 wp 目錄存在
+mkdir -p wp
+
+# 使用 WP-CLI 下載 WordPress 核心文件
+docker-compose exec wordpress wp core download --path=/var/www/html --force
+
+# 創建 wp-config.php 文件
+docker-compose exec wordpress wp config create \
+  --dbname=${MYSQL_DATABASE} \
+  --dbuser=${MYSQL_USER} \
+  --dbpass=${MYSQL_PASSWORD} \
+  --dbhost=mariadb \
+  --path=/var/www/html
+
+# 安裝 WordPress
+docker-compose exec wordpress wp core install \
+  --url=${NGINX_HOST} \
+  --title="WordPress Site" \
+  --admin_user=admin \
+  --admin_password=your_password \
+  --admin_email=your_email@example.com \
+  --path=/var/www/html
+
+# 設置正確的權限
+docker-compose exec wordpress chown -R www-data:www-data /var/www/html
+```
+
+#### 方法 4：檢查 docker-compose.yml 中的卷配置
+
+確保 docker-compose.yml 文件中正確配置了卷映射：
+
+```yaml
+services:
+  wordpress:
+    volumes:
+      - ./wp:/var/www/html
+```
+
+如果配置正確但 wp 目錄仍然為空，可能是權限問題或容器未正確掛載卷。嘗試重新創建容器：
+
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+### 6. Nginx 403 Forbidden 錯誤
+
+如果 WordPress 文件已正確安裝但仍然遇到 403 Forbidden 錯誤，可能是 Nginx 配置問題：
+
+#### 方法 1：檢查目錄權限
+
+```bash
+# 設置正確的目錄權限
+docker-compose exec wordpress chown -R www-data:www-data /var/www/html/
+docker-compose exec wordpress find /var/www/html/ -type d -exec chmod 755 {} \;
+docker-compose exec wordpress find /var/www/html/ -type f -exec chmod 644 {} \;
+```
+
+#### 方法 2：檢查 Nginx 配置
+
+```bash
+# 檢查 Nginx 配置中的 root 路徑
+docker-compose exec nginx cat /etc/nginx/conf.d/default.conf | grep root
+
+# 確保 try_files 指令正確
+docker-compose exec nginx cat /etc/nginx/conf.d/default.conf | grep -A 5 "location /"
+
+# 修改 Nginx 配置，確保 index 指令包含 index.php
+cat > nginx/conf.d/default.conf << EOF
+server {
+    listen 80;
+    server_name ${NGINX_HOST};
+    
+    root /var/www/html;
+    index index.php index.html index.htm;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass wordpress:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PATH_INFO \$fastcgi_path_info;
+    }
+}
+EOF
+
+# 重啟 Nginx
+docker-compose restart nginx
+```
+
+#### 方法 3：檢查 WordPress 是否正確安裝
+
+```bash
+# 檢查 WordPress 是否已安裝
+docker-compose exec wordpress wp core is-installed
+
+# 如果未安裝，可以運行安裝
+docker-compose exec wordpress wp core install \
+  --url=${NGINX_HOST} \
+  --title="WordPress Site" \
+  --admin_user=admin \
+  --admin_password=your_password \
+  --admin_email=your_email@example.com
+```
+### 7. 備份問題
+
+如果執行 `./scripts/export-data.sh` 腳本備份資料庫時遇到問題，請嘗試以下故障排除步驟：
+
+#### 方法 1：檢查資料庫憑證
+
+確保 `.env` 文件中的資料庫憑證（`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`）與 MariaDB 容器中的實際憑證相符。
+
+#### 方法 2：檢查 MariaDB 容器狀態
+
+使用 `docker-compose ps` 命令檢查 MariaDB 容器（`wp_db`）是否正在運行。如果容器未運行，請嘗試重新啟動容器：
+
+```bash
+docker-compose restart mariadb
+```
+
+#### 方法 3：檢查 mysqldump 命令
+
+嘗試在容器內部手動執行 `mysqldump` 命令，以獲取更詳細的錯誤訊息：
+
+```bash
+docker exec wp_db mysqldump -u${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE}
+```
+
+如果命令執行失敗，請檢查錯誤訊息，並根據錯誤訊息進行故障排除。
+
+#### 方法 4： 檢查資料庫是否存在
+使用以下指令進入mysql
+```
+docker exec -it wp_db mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD}
+```
+然後
+```
+show databases;
+```
+檢查是否有${MYSQL_DATABASE}
