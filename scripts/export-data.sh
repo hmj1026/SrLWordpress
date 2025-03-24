@@ -112,7 +112,7 @@ main() {
     # 資料庫備份
     echo "  ▷ 備份資料庫..."
     create_mysql_config
-    MYSQLDUMP_OPTS="--defaults-extra-file=/etc/mysql/conf.d/$MYSQL_CRED_FILE --single-transaction --routines --triggers --no-tablespaces"
+    MYSQLDUMP_OPTS="--defaults-extra-file=/etc/mysql/conf.d/$MYSQL_CRED_FILE --single-transaction --routines --triggers --no-tablespaces --column-statistics=0"
     if [ "$ADD_DROP_DB" = "true" ]; then
         echo "    - 啟用資料庫重建功能 (DROP/CREATE)"
         MYSQLDUMP_OPTS+=" --add-drop-database --databases $MYSQL_DATABASE"
