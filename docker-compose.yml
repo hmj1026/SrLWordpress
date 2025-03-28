@@ -11,6 +11,7 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/certs:/etc/nginx/certs
+      - ./nginx/logs:/var/log/nginx
       - ./wp:/var/www/html
     environment:
       - PROJECT_NAME=${PROJECT_NAME}
