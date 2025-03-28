@@ -35,6 +35,16 @@ server {
     fastcgi_read_timeout 180;
     client_max_body_size 32M;
 
+    # 封鎖 xmlrpc.php 請求
+    location = /xmlrpc.php {
+        deny all;
+        return 403;
+    }
+
+    location ~* /wp-admin/setup-config\.php {
+    	deny all;
+    }
+
     location / {
         try_files $uri $uri/ /index.php?$args;
     }
