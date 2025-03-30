@@ -14,6 +14,8 @@ wp/*
 # Nginx 配置和證書
 nginx/certs/*
 !nginx/certs/.gitkeep
+nginx/logs/*
+!nginx/logs/.gitkeep
 nginx/conf.d/default.conf
 
 # 日誌文件
