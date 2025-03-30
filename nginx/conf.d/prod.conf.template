@@ -45,6 +45,10 @@ server {
     	deny all;
     }
 
+    location ~* \.(env|log|git|svn|htaccess)$ {
+        deny all;
+    }
+
     location / {
         try_files $uri $uri/ /index.php?$args;
     }
