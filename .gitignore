@@ -16,7 +16,7 @@ nginx/certs/*
 !nginx/certs/.gitkeep
 nginx/logs/*
 !nginx/logs/.gitkeep
-nginx/conf.d/default.conf
+nginx/conf.d/*.conf
 
 # 日誌文件
 *.log
