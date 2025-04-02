@@ -23,6 +23,7 @@ services:
       - wordpress
     networks:
       - wp_network
+      - srl_shared_network
 
   mariadb:
     image: mariadb:latest
@@ -71,3 +72,5 @@ services:
 networks:
   wp_network:
     driver: bridge
+  srl_shared_network:
+    external: true
