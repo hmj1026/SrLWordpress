@@ -134,12 +134,22 @@ docker-compose exec wordpress wp --info
 ### 數據備份/還原
 
 ```bash
-# 備份
+# 備份（MariaDB 11.7+ 兼容版本）
+./scripts/export-data-v2.sh
+
+# 備份（舊版本，可能不兼容新版 MariaDB）
 ./scripts/export-data.sh
 
 # 還原
 ./scripts/import-data.sh backups/database_[timestamp].sql backups/wp_backup_[timestamp].tar.gz
 ```
+
+### MariaDB 兼容性說明
+
+本專案使用 MariaDB 11.7+，請注意：
+- 推薦使用 `export-data-v2.sh` 進行備份
+- 新版 MariaDB 使用 `mariadb-dump` 而非 `mysqldump`
+- 不支援 `--column-statistics=0` 參數
 
 ## 文檔
 
@@ -148,6 +158,7 @@ docker-compose exec wordpress wp --info
 - [部署指南](docs/deployment-guide.md)
 - [SSL 設定](docs/ssl-setup.md)
 - [本地開發指南](docs/local-dev-setup.md)
+- [MariaDB 升級指南](docs/mariadb-upgrade-guide.md)
 
 ## 注意事項
 
